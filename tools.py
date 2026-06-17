@@ -76,7 +76,21 @@ def suggest_outfit(new_item: dict, wardrobe: dict) -> str:
     items = wardrobe.get("items", [])
 
     if not items:
-        return "Wardrobe is empty — no outfit could be suggested."
+        prompt = (
+            f"A user is thrifting and considering buying this item:\n"
+            f"  Name: {new_item['title']}\n"
+            f"  Category: {new_item['category']}\n"
+            f"  Colors: {', '.join(new_item.get('colors', []))}\n"
+            f"  Style tags: {', '.join(new_item.get('style_tags', []))}\n\n"
+            f"They have no existing wardrobe. Give them 1–2 sentences of general "
+            f"styling advice for this item — what kinds of pieces it pairs well with, "
+            f"what occasions it suits, or how to style it."
+        )
+        response = _get_groq_client().chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return response.choices[0].message.content.strip()
 
     client = _get_groq_client()
 
