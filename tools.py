@@ -114,31 +114,40 @@ def suggest_outfit(new_item: dict, wardrobe: dict) -> str:
 # ── Tool 3: create_fit_card ───────────────────────────────────────────────────
 
 def create_fit_card(outfit: str, new_item: dict) -> str:
-    """
-    Generate a short, shareable outfit caption for the thrifted find.
+    if not outfit or not outfit.strip():
+        return (
+            "The outfit description is missing or incomplete. "
+            "Could you share more details about the items you'd like to wear with "
+            f"the {new_item.get('title', 'new item')}? Once you do, I'll re-run "
+            "the outfit suggester and generate your fit card."
+        )
+    
+    if not new_item.get("title"):
+        return "Missing item details — please re-run the listing search and try again."
 
-    Args:
-        outfit:   The outfit suggestion string from suggest_outfit().
-        new_item: The listing dict for the thrifted item.
+    client = _get_groq_client()
 
-    Returns:
-        A 2–4 sentence string usable as an Instagram/TikTok caption.
-        If outfit is empty or missing, return a descriptive error message
-        string — do NOT raise an exception.
+    prompt = (
+        f"Write a 2–4 sentence Instagram caption for this thrifted outfit.\n\n"
+        f"Thrifted item: {new_item['title']}\n"
+        f"Price: ${new_item['price']}\n"
+        f"Platform: {new_item['platform']}\n"
+        f"Full outfit: {outfit}\n\n"
+        f"Rules:\n"
+        f"- Sound like a real person's OOTD post, casual and authentic\n"
+        f"- Mention the item name, price, and platform once each, naturally\n"
+        f"- Capture the specific vibe of the outfit (don't be generic)\n"
+        f"- You can use 1–2 emojis if they fit the tone\n"
+        f"- Do NOT sound like a product description or ad copy\n"
+    )
 
-    The caption should:
-    - Feel casual and authentic (like a real OOTD post, not a product description)
-    - Mention the item name, price, and platform naturally (once each)
-    - Capture the outfit vibe in specific terms
-    - Sound different each time for different inputs (use higher LLM temperature)
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=1.2,
+    )
 
-    TODO:
-        1. Guard against an empty or whitespace-only outfit string.
-        2. Build a prompt that gives the LLM the item details and the outfit,
-           and asks for a caption matching the style guidelines above.
-        3. Call the LLM and return the response.
-
-    Before writing code, fill in the Tool 3 section of planning.md.
-    """
-    # Replace this with your implementation
-    return ""
+    caption = response.choices[0].message.content.strip()
+    return caption if caption else (
+        "Couldn't generate a fit card. Please provide more outfit details and try again."
+    )
