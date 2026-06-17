@@ -48,53 +48,73 @@ def _new_session(query: str, wardrobe: dict) -> dict:
 # ── planning loop ─────────────────────────────────────────────────────────────
 
 def run_agent(query: str, wardrobe: dict) -> dict:
-    """
-    Main agent entry point. Runs the FitFindr planning loop for a single
-    user interaction and returns the completed session dict.
-
-    Args:
-        query:    Natural language user request
-                  (e.g., "vintage graphic tee under $30, size M")
-        wardrobe: User's wardrobe dict — use get_example_wardrobe() or
-                  get_empty_wardrobe() from utils/data_loader.py
-
-    Returns:
-        The session dict after the interaction completes. Check session["error"]
-        first — if it is not None, the interaction ended early and the other
-        output fields (outfit_suggestion, fit_card) will be None.
-
-    TODO — implement this function using the planning loop you designed in planning.md:
-
-        Step 1: Initialize the session with _new_session().
-
-        Step 2: Parse the user's query to extract a description, size, and
-                max_price. You can use regex, string splitting, or ask the LLM
-                to parse it — document your choice in planning.md.
-                Store the result in session["parsed"].
-
-        Step 3: Call search_listings() with the parsed parameters.
-                Store results in session["search_results"].
-                If no results: set session["error"] to a helpful message and
-                return the session early. Do NOT proceed to suggest_outfit
-                with empty input.
-
-        Step 4: Select the item to use (e.g., the top result).
-                Store it in session["selected_item"].
-
-        Step 5: Call suggest_outfit() with the selected item and wardrobe.
-                Store the result in session["outfit_suggestion"].
-
-        Step 6: Call create_fit_card() with the outfit suggestion and selected item.
-                Store the result in session["fit_card"].
-
-        Step 7: Return the session.
-
-    Before writing code, complete the Planning Loop and State Management sections
-    of planning.md — your implementation should match what you described there.
-    """
-    # TODO: implement the planning loop
+    # Step 1: Initialize session
     session = _new_session(query, wardrobe)
-    session["error"] = "Planning loop not yet implemented."
+
+    # Step 2: Parse query with regex
+    import re
+
+    size_match = re.search(r'\bsize\s+(\S+)', query, re.IGNORECASE)
+    price_match = re.search(r'under\s+\$?([\d.]+)', query, re.IGNORECASE)
+
+    size = size_match.group(1) if size_match else None
+    max_price = float(price_match.group(1)) if price_match else None
+    # Strip size/price phrases to get a cleaner description
+    description = re.sub(r'(size\s+\S+|under\s+\$?[\d.]+)', '', query, flags=re.IGNORECASE).strip()
+
+    session["parsed"] = {
+        "description": description,
+        "size": size,
+        "max_price": max_price,
+    }
+
+    # Step 3: search_listings
+    results = search_listings(
+        description=description,
+        size=size,
+        max_price=max_price,
+    )
+    session["search_results"] = results
+
+    if not results:
+        session["error"] = "I couldn't find any listings that matched. Try a different description, size, or price."
+        return session
+
+    # Step 4: Select top result
+    session["selected_item"] = results[0]
+
+    # Step 5: suggest_outfit
+    outfit_suggestion = suggest_outfit(
+        new_item=session["selected_item"],
+        wardrobe=wardrobe,
+    )
+    session["outfit_suggestion"] = outfit_suggestion
+
+    if not outfit_suggestion or "empty" in outfit_suggestion.lower() or "no outfit" in outfit_suggestion.lower():
+        session["error"] = outfit_suggestion or "Wardrobe is empty or no outfit could be suggested."
+        return session
+
+    # Step 6: create_fit_card (with one retry via suggest_outfit if incomplete)
+    fit_card = create_fit_card(
+        outfit=outfit_suggestion,
+        new_item=session["selected_item"],
+    )
+
+    if not fit_card or "more information" in fit_card.lower() or "incomplete" in fit_card.lower():
+        # Re-run suggest_outfit then retry create_fit_card
+        outfit_suggestion = suggest_outfit(
+            new_item=session["selected_item"],
+            wardrobe=wardrobe,
+        )
+        session["outfit_suggestion"] = outfit_suggestion
+        fit_card = create_fit_card(
+            outfit=outfit_suggestion,
+            new_item=session["selected_item"],
+        )
+
+    session["fit_card"] = fit_card
+
+    # Step 7: Return session
     return session
 
 
