@@ -59,7 +59,6 @@ def run_agent(query: str, wardrobe: dict) -> dict:
 
     size = size_match.group(1) if size_match else None
     max_price = float(price_match.group(1)) if price_match else None
-    # Strip size/price phrases to get a cleaner description
     description = re.sub(r'(size\s+\S+|under\s+\$?[\d.]+)', '', query, flags=re.IGNORECASE).strip()
 
     session["parsed"] = {
@@ -84,14 +83,18 @@ def run_agent(query: str, wardrobe: dict) -> dict:
     session["selected_item"] = results[0]
 
     # Step 5: suggest_outfit
+    if not wardrobe.get("items"):
+        session["error"] = "Your wardrobe is empty — add some pieces and try again."
+        return session
+
     outfit_suggestion = suggest_outfit(
         new_item=session["selected_item"],
         wardrobe=wardrobe,
     )
     session["outfit_suggestion"] = outfit_suggestion
 
-    if not outfit_suggestion or "empty" in outfit_suggestion.lower() or "no outfit" in outfit_suggestion.lower():
-        session["error"] = outfit_suggestion or "Wardrobe is empty or no outfit could be suggested."
+    if not outfit_suggestion or "no outfit" in outfit_suggestion.lower():
+        session["error"] = outfit_suggestion or "No outfit could be suggested."
         return session
 
     # Step 6: create_fit_card (with one retry via suggest_outfit if incomplete)
@@ -100,8 +103,7 @@ def run_agent(query: str, wardrobe: dict) -> dict:
         new_item=session["selected_item"],
     )
 
-    if not fit_card or "more information" in fit_card.lower() or "incomplete" in fit_card.lower():
-        # Re-run suggest_outfit then retry create_fit_card
+    if not fit_card or "could not generate fit card" in fit_card.lower():
         outfit_suggestion = suggest_outfit(
             new_item=session["selected_item"],
             wardrobe=wardrobe,

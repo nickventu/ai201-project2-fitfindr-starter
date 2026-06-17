@@ -51,7 +51,7 @@ Returns a string that is a freeform sentence description of an outfit suggestion
 
 **What happens if it fails or returns nothing:**
 <!-- What should the agent do if the wardrobe is empty or no outfit can be suggested? -->
-Return a string that says that wardrobe is empty or no outfit could be suggested respectively then return early
+Returns general styling advice for the item, then return early
 
 ---
 
@@ -90,8 +90,9 @@ Return a string asking for more information on the outfit and prompt the user to
 Given a query run search_listings then check if results is empty
 If yes send an error message that return an empty list and tell the user there is no available match then return early
 If not set new_item = results[0] and proceed to suggest_outfit
-Run suggest_outfit then check if wardrobe is empty OR an outfit cannot be suggested
-If yes send an error message that says that wardrobe is empty or no outfit could be suggested respectively then return early
+Check if wardrobe is empty, if yes says that wardrobe is empty then return early
+Run suggest_outfit then check if an outfit cannot be suggested
+If yes send an error message that says outfit could not be suggested respectively then return early
 If not set outfit_suggestion = "..." and proceed to create_fit_card
 Run create_fit_card then check if outfit_suggestion and new_item are empty/incomplete
 If yes send an error message asking for more information and prompt the user to input that information, then run tool 2 and try running tool 3 again with the resulting output.
@@ -103,6 +104,18 @@ If not set fit_card = "..." and return it, ending the program.
 
 **How does information from one tool get passed to the next?**
 <!-- Describe how your agent stores and accesses state within a session. What data is tracked? How is it passed between tool calls? -->
+The agent uses a session dictionary initialized by _new_session() at the start of each interaction. It tracks the following fields throughout the run:
+
+query — the original user query string
+parsed — a dict containing the extracted description, size, and max_price parsed from the query via regex
+search_results — the list of matching listing dicts returned by search_listings
+selected_item — the top result (search_results[0]), passed as new_item into suggest_outfit and create_fit_card
+wardrobe — the wardrobe dict passed in at the start, checked directly by the agent before calling suggest_outfit
+outfit_suggestion — the string returned by suggest_outfit, passed as outfit into create_fit_card
+fit_card — the string returned by create_fit_card, the final output of a successful interaction
+error — set to a descriptive string if the interaction ends early; None on success
+
+State is never passed globally — each tool receives only what it needs as arguments, and results are written back into the session dict immediately after each tool call.
 
 ---
 
@@ -112,10 +125,10 @@ For each tool, describe the specific failure mode you're handling and what the a
 
 | Tool | Failure mode | Agent response |
 |------|-------------|----------------|
-| search_listings | No results match the query |"I couldn't find anything that matched what you are looking for"|
-| suggest_outfit | Wardrobe is empty |"That wardrobe is empty, can't create an outfit from it.|
-| suggest_outfit | Wardrobe missing items to complete outfit|"That wardrobe doesn't have enough clothing to create an outfit from."|
-| create_fit_card | Outfit input is missing or incomplete |"I need more information on the fit, can you give me your wardrobe and a specific item?" -> run suggest_outfit -> run create_fit_card|
+| search_listings | No results match the query |"I couldn't find any listings that matched. Try a different description, size, or price."|
+| suggest_outfit | Wardrobe is empty |Agent detects empty wardrobe before calling the tool and sets error: "Your wardrobe is empty — add some pieces and try again."|
+| suggest_outfit | No outfit could be suggested from wardrobe items |"No outfit could be suggested." → return early|
+| create_fit_card | Outfit input is missing or incomplete |"Could not generate fit card — outfit information was incomplete." → re-run suggest_outfit → retry create_fit_card|
 
 ---
 

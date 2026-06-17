@@ -129,12 +129,7 @@ def suggest_outfit(new_item: dict, wardrobe: dict) -> str:
 
 def create_fit_card(outfit: str, new_item: dict) -> str:
     if not outfit or not outfit.strip():
-        return (
-            "The outfit description is missing or incomplete. "
-            "Could you share more details about the items you'd like to wear with "
-            f"the {new_item.get('title', 'new item')}? Once you do, I'll re-run "
-            "the outfit suggester and generate your fit card."
-        )
+        return "Could not generate fit card — outfit information was incomplete."
     
     if not new_item.get("title"):
         return "Missing item details — please re-run the listing search and try again."
